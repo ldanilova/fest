@@ -45,17 +45,14 @@ server <- function(input, output,session) {
 	
 	# increase file upload limit to 100M
 	options(shiny.maxRequestSize=100*1024^2, java.parameters = "-Xmx8000m")
-	require(shiny)
-	require(tools)
+	library(shiny)
+  library(tools)
 #	require(xlsx)
 	if (!require(WriteXLS)) install.packages("WriteXLS")
 	require("Matrix")
-	if(!require(tcR)) install.packages("tcR")
+	#if(!require(tcR)) install.packages("tcR")
 	# if (!require(foreign)) install.package('foreign')
-	# if(!require(immunarch)) {
-		# install.packages("devtools") # skip this if you already installed devtools
-		# devtools::install_url("https://github.com/immunomind/immunarch/raw/master/immunarch.tar.gz")
-	# }
+	 if(!require(immunarch)) install.packages("immunarch") 
 
 	source('manafest_shiny_functions.r')
 	
@@ -81,8 +78,12 @@ observeEvent(input$sourceFiles,{  output$message = renderUI({
 		# specify input file format
 		if (input$inputFiles == 'VDJtools files') fileFormat = 'vdjtools'
 		if (input$inputFiles == 'Adaptive files') fileFormat = 'adaptive'
-		# read in input files
-		res = readMergeSave(files = unlist(input$sourceFiles$datapath), filenames = unlist(input$sourceFiles$name), inputFileFormat = fileFormat)
+    # extract path to a folder with input file to pass into reading function
+		# supplied source names of loaded files to be used as names for data objects
+		#  and read in input files
+browser()
+		res = readMergeSave(files = dirname(input$sourceFiles$datapath[1]), 
+		                    filenames = unlist(input$sourceFiles$name))
 		
 		if(!is.null(res))
 		{

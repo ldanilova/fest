@@ -54,12 +54,14 @@ parse.immunoseq4 = function (.filename, reads, aa.seq)
   return(df)
 }
 
-# reads files, removes non-productive sequencies, extracts counts, creates all necessary objects, and saves them
+# reads files, removes non-productive sequencies, extracts counts, 
+# creates all necessary objects, and saves them
+# input: a path to folder with input files
+# output:
 # mergedData is AA level counts (merged by AA sequences)
 # ntData is nucleotide level counts
 # productiveReadCounts is the total number of reads of productive sequencies
-readMergeSave = function(files, filenames = NULL, readColName = 'count', aaColName = 'aminoAcid', 
-	inputFileFormat = c('adaptive','vdjtools'))
+readMergeSave = function(files, filenames = NULL)
 {
 	if (length(files) == 0)
 	{
@@ -67,41 +69,24 @@ readMergeSave = function(files, filenames = NULL, readColName = 'count', aaColNa
 			return(NULL);
 	}
 		require(tools)
-		require(gplots)
-		require(tcR)
+		require(immunarch)
 		
+  # output objects
 		mergedData = ntData = list()
+		
+		# read all files with immunarch functionality
+		repertoire = repLoad(.path = files)
+		
 		# the names of files that were actually read in
 		readFiles = c()
-		for(i in files)
+		for(i in names(repertoire$data))
 		{
 			print(i)
-#			dat = read.table(file = i, header = T, sep = '\t', row.names =1, stringsAsFactors = F)
-			if (inputFileFormat == 'adaptive')
-			{
-				# read header to find column names for reads and AA sequence
-				header = read.table(file = i, nrow = 1, sep = '\t', stringsAsFactors = F)
-				aaCol = grep(aaColName, header)
-				countsCol = grep(readColName, header)
-				if (!is.null(aaCol) && !is.null(countsCol) && length(aaCol) == 1 && length(countsCol) == 1)
-				{
-					dat = parse.immunoseq4(.filename = i, reads = header[countsCol], aa.seq = header[aaCol])
-				}else{ 
-					print(paste('There is no or more than one column for reads and AA sequence in',i,'file'))
-					next;}
-			}
-			if (inputFileFormat == 'vdjtools')
-				dat = parse.vdjtools(.filename = i)
-
-				# find rows that have stop codon (*) to remove them from the analysis
-				# non-productive sequences
-				rows = unlist(sapply(c('*','~','_'),grep,dat[,'CDR3.amino.acid.sequence'], fixed = T))
-				if(length(rows)>0) dat = dat[-rows,]
+		  dat = repertoire$data[[i]]
 				#count reads of productive sequences only
-				mergedData[[i]] = tapply(dat[,'Read.count'], dat[,'CDR3.amino.acid.sequence'], sum, na.rm = T)
+				mergedData[[i]] = tapply(dat[,'Clones'], dat[,'CDR3.aa'], sum, na.rm = T)
 				# nucleotide level data
-				ntData[[i]] = tapply(dat[,'Read.count'], dat[,'CDR3.nucleotide.sequence'], sum, na.rm = T)
-				# add the names of the file to the list of the read files
+				ntData[[i]] = tapply(dat[,'Clones'], dat[,'CDR3.nt'], sum, na.rm = T)
 				readFiles = c(readFiles, i)
 		}
 		if (length(mergedData) == 0)
@@ -109,8 +94,15 @@ readMergeSave = function(files, filenames = NULL, readColName = 'count', aaColNa
 			print(paste('There are no data to read'))
 			return(NULL)
 		}
-		if (is.null(filenames)) {filenames = sapply(unlist(lapply(readFiles,basename)),file_path_sans_ext)} else {
-			filenames = sapply(unlist(filenames),file_path_sans_ext)}		
+		# if file names are not supplied, use internal shiny server file names (0,1,2,..)
+		if (is.null(filenames)) 
+		{
+		  filenames = sapply(unlist(lapply(readFiles,basename)),file_path_sans_ext)
+		} else {
+		  # it files names are supplied (actual file names that were loaded)
+		  filenames = sapply(unlist(filenames),file_path_sans_ext)
+		}	
+		# assign file names as names to objects
 		names(mergedData) = names(ntData) = filenames
 		return(list(mergedData = mergedData,ntData = ntData))
 }
