@@ -40,6 +40,8 @@
 # make comparison with reference as an option (checkbox)
 # if off, then each condition will be compared with top two other conditions
 
+# 2023-12-01
+# switched to immunarch
 
 server <- function(input, output,session) {
 	
@@ -49,7 +51,7 @@ server <- function(input, output,session) {
   library(tools)
 #	require(xlsx)
 	if (!require(WriteXLS)) install.packages("WriteXLS")
-	require("Matrix")
+  library("Matrix")
 	#if(!require(tcR)) install.packages("tcR")
 	# if (!require(foreign)) install.package('foreign')
 	 if(!require(immunarch)) install.packages("immunarch") 
@@ -76,12 +78,10 @@ observeEvent(input$sourceFiles,{  output$message = renderUI({
 			updateSelectInput(session, "excludeSamp", choices=list('None'))
 		}
 		# specify input file format
-		if (input$inputFiles == 'VDJtools files') fileFormat = 'vdjtools'
-		if (input$inputFiles == 'Adaptive files') fileFormat = 'adaptive'
+		if (input$inputFiles == 'FEST files') fileFormat = 'fest'
     # extract path to a folder with input file to pass into reading function
 		# supplied source names of loaded files to be used as names for data objects
 		#  and read in input files
-browser()
 		res = readMergeSave(files = dirname(input$sourceFiles$datapath[1]), 
 		                    filenames = unlist(input$sourceFiles$name))
 		
@@ -236,10 +236,11 @@ observeEvent(input$runAnalysis,{
 	
 
  	# save results with selected thresholds when the Download Results button is clicked
-	output$saveResults <- downloadHandler(
+output$saveResults <- downloadHandler(
 		filename=function() {
 			paste0('analysisRes_',Sys.Date(),'.xlsx')
 		},
+		contentType = "text/xlsx",
 		content=function(file){
 		if (exists('analysisRes', envir = .GlobalEnv))
 		{
@@ -275,7 +276,7 @@ observeEvent(input$runAnalysis,{
 				output$message = renderText('There are no positive clones. Try to adjust thresholds')
 				# add a sheet to the output with significant clones comparing to reference 
 				#clones = rownames(resTable)[which(resTable[,'significant_comparisons'] == 1)]
-				tablesToXls$summary = data.frame('There is no positive clones', row.names = NULL, check.names = F)
+				tablesToXls$summary = data.frame('There are no positive clones', row.names = NULL, check.names = F)
 			}else{
 			# if there are positive clones, save them in to Excel file
 				# create table with results 
@@ -329,6 +330,7 @@ observeEvent(input$runAnalysis,{
 			#========
 			# save results to xlsx
 #			tablesToXls$input = data.frame(isolate(reactiveValuesToList(input)))
+#		browser()
 			WriteXLS('tablesToXls', file, SheetNames = names(tablesToXls), row.names = T)
 
 			output$message = renderText('The results are saved')
@@ -343,6 +345,7 @@ observeEvent(input$runAnalysis,{
 	output$saveHeatmaps <- downloadHandler(
 		filename=function(){
 		 paste0('heatmaps_',Sys.Date(),'.pdf')},
+		contentType = "image/pdf",
 		content=function(file){
 		if (exists('analysisRes', envir = .GlobalEnv))
 		{
@@ -351,17 +354,29 @@ observeEvent(input$runAnalysis,{
 			sampForAnalysis = setdiff(names(obj), c(input$excludeSamp,input$refSamp, input$baselineSamp))
 			posClones = getPositiveClones(analysisRes, obj, productiveReadCounts, samp = sampForAnalysis,
 				orThr = as.numeric(input$orThr), fdrThr=as.numeric(input$fdrThr))
-
-			# create a table with results
-			resTable = createResTable(analysisRes,mergedData,productiveReadCounts, orThr = as.numeric(input$orThr), 
-				FDR_threshold = as.numeric(input$fdrThr), saveCI = F)
-			# make heatmap with all significant clones
-			posClones = list(rownames(resTable))
-			names(posClones) = 'All_significant'
-
-			makeHeatmaps(posClones, obj, productiveReadCounts, samp = sampForAnalysis, refSamp = input$refSamp, 
-				fileName = file, size = 7)	
-			output$message = renderText('The heat map is saved')
+			# if there is no positive clones, do nothing
+			if (length(posClones)==0)
+			{
+			  output$message = renderText('There are no positive clones. Try to adjust thresholds')
+			}
+			if(length(posClones)==1)
+			{
+			  output$message = renderText('There is only one positive clone. Try to adjust thresholds to get more clones to plot')
+			}
+			if (length(posClones)>1)
+			{
+  			# create a table with results
+  			resTable = createResTable(analysisRes,mergedData,productiveReadCounts, orThr = as.numeric(input$orThr), 
+  				FDR_threshold = as.numeric(input$fdrThr), saveCI = F)
+  			# make heatmap with all significant clones
+  			posClones = list(rownames(resTable))
+  			names(posClones) = 'All_significant'
+  
+  			makeHeatmaps(posClones, obj, productiveReadCounts, 
+  			             samp = sampForAnalysis, refSamp = input$refSamp, 
+  				           fileName = file, size = 7)	
+  			output$message = renderText('The heat map is saved')
+			}
 
 		}
 	})
@@ -377,20 +392,24 @@ tabsetPanel(
 	   # the left side panel 
 		sidebarPanel(
 		# select the format of input files
-		selectInput('inputFiles', 'Select an input format', choices = c('VDJtools files','Adaptive files','an R object with data'), selected = NULL,
-			multiple = FALSE,selectize = TRUE, width = NULL, size = NULL),
+		selectInput('inputFiles', 'Select an input format', 
+		            choices = c('FEST files','an R object with data'), 
+		            selected = NULL, multiple = FALSE,selectize = TRUE, 
+		            width = NULL, size = NULL),
 		
 		# if a previously saved R object with the input data will be uploaded
 		 conditionalPanel(
 			  condition = "input.inputFiles == 'an R object with data'",
-			  fileInput('inputObj', 'Upload an R object with data (.rda)', multiple = FALSE,
+			  fileInput('inputObj', 'Upload an R object with data (.rda)', 
+			            multiple = FALSE,
 					  accept=c('rda', '.rda'))
 		 ),
 		# show the fileInput control depending on the selected values of inputFiles
 		# if files with raw data will be uploaded
 		 conditionalPanel(
-			  condition = "input.inputFiles == 'VDJtools files' | input.inputFiles == 'Adaptive files'",
-			  fileInput('sourceFiles', 'Upload FEST files (.tsv)', multiple = TRUE,
+			  condition = "input.inputFiles == 'FEST files'",
+			  fileInput('sourceFiles', 'Upload FEST files (.tsv)', 
+			            multiple = TRUE,
 					 accept=c('text/tsv', 'text/comma-separated-values,text/plain', '.tsv')),
 			 downloadButton('saveInputObj', 'Save Input Object')
 		 ),

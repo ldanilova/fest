@@ -3,56 +3,6 @@
 #
 geti = function(x,i){return(x[i])}
 
-# modified version of the parse.immunoseq function from the tcR package to read new Adaptive format
-parse.immunoseq4 = function (.filename, reads, aa.seq) 
-{
-  require(tcR)
-  filename <- .filename
-  nuc.seq <- "nucleotide"
-  barcodes <- "vIndex"
-  vgenes <- "vGeneName"
-  jgenes <- "jGeneName"
-  dgenes <- "dFamilyName"
-  vend <- "n1Index"
-  jstart <- "jIndex"
-  dalignments <- c("dIndex", "n2Index")
-  vd.insertions <- "n1Insertion"
-  dj.insertions <- "n2Insertion"
-  total.insertions <- NA
-  .skip = 0
-  .sep = "\t"
-  df <- parse.cloneset(.filename = filename, .nuc.seq = nuc.seq, 
-                       .aa.seq = aa.seq, .reads = reads, .barcodes = barcodes, 
-                       .vgenes = vgenes, .jgenes = jgenes, .dgenes = dgenes, 
-                       .vend = vend, .jstart = jstart, .dalignments = dalignments, 
-                       .vd.insertions = vd.insertions, .dj.insertions = dj.insertions, 
-                       .total.insertions = total.insertions, .skip = .skip, 
-                       .sep = .sep)
-  df$CDR3.nucleotide.sequence <- substr(df$CDR3.nucleotide.sequence, 
-                                        df$Umi.count + 1, nchar(df$CDR3.nucleotide.sequence) - 6)
-  df$CDR3.amino.acid.sequence <- bunch.translate(df$CDR3.nucleotide.sequence)
-  .fix.genes <- function(.col) {
-    .col <- gsub(",", ", ", .col, fixed = T, useBytes = T)
-    .col <- gsub("([0])([0-9])", "\\2", .col, useBytes = T)
-    .col <- gsub("TCR", "TR", .col, fixed = T, useBytes = T)
-    .col
-  }
-  df$V.gene <- .fix.genes(df$V.gene)
-  df$D.gene <- .fix.genes(df$D.gene)
-  df$J.gene <- .fix.genes(df$J.gene)
-  .fix.poses <- function(.col) {
-    df[df[[.col]] != -1, .col] <- df[df[[.col]] != -1, .col] - 
-      df$Umi.count[df[[.col]] != -1]
-    df
-  }
-  df <- .fix.poses("V.end")
-  df <- .fix.poses("D3.end")
-  df <- .fix.poses("D5.end")
-  df <- .fix.poses("J.start")
-  df$Umi.count <- NA
-  df$Umi.proportion <- NA
-  return(df)
-}
 
 # reads files, removes non-productive sequencies, extracts counts, 
 # creates all necessary objects, and saves them
@@ -97,12 +47,17 @@ readMergeSave = function(files, filenames = NULL)
 		# if file names are not supplied, use internal shiny server file names (0,1,2,..)
 		if (is.null(filenames)) 
 		{
-		  filenames = sapply(unlist(lapply(readFiles,basename)),file_path_sans_ext)
+		  filenames = readFiles
 		} else {
 		  # it files names are supplied (actual file names that were loaded)
-		  filenames = sapply(unlist(filenames),file_path_sans_ext)
+		  # take file names that were actually read and create an index
+		  # shiny server saves files with 0,1,2,.. names
+		  ind = as.numeric(names(repertoire$data))+1
+		  filenames = sapply(unlist(filenames[ind]),file_path_sans_ext)
 		}	
 		# assign file names as names to objects
+#		browser()
+		# if not all loaded files 
 		names(mergedData) = names(ntData) = filenames
 		return(list(mergedData = mergedData,ntData = ntData))
 }
@@ -336,8 +291,9 @@ getUniqueClones = function(samp, mergedData, readCountThr = 0)
 }
 
 # make heatmaps of frequencies (if refSamp is not specified) of each element of input list of clones and samples and plot FC if refSamp is specified
-makeHeatmaps = function(listOfclones, mergedData, totalReadCountPerSample, samp = names(mergedData), refSamp = NULL, 
-	fileName = 'heatmap.pdf',size = 7)
+makeHeatmaps = function(listOfclones, mergedData, totalReadCountPerSample, 
+                        samp = names(mergedData), refSamp = NULL, 
+                        fileName = 'heatmap.pdf',size = 7)
 {
 	if (length(listOfclones)==0)
 	{
@@ -433,6 +389,7 @@ getPositiveClones = function(analysisRes, mergedData, totalReadCounts, samp = na
 #print(countMatrix)
 	# remove conditions with less than nReads reads from analysis 
 #	freqMatrix[countMatrix<nReads] = 0 # removed this filter in v12
+
 	# compare with the second highest
 	fishRes1 = getFisherForNclone(freqMatrix, rownames(freqMatrix),2,mergedData,totalReadCounts)
 	# compare with the third highest
@@ -462,7 +419,7 @@ getFisherForNclone = function(freq, clones, n = 2,mergedData,productiveReadCount
 	freq[freq==0] = NA
 	for( i in clones)
 	{
-		r = freq[i,]
+		r = unlist(freq[i,])
 		r = r[order(r,decreasing = T)]
 		if (!is.na(r[n])) res = runSingleFisher(i,names(r)[c(1,n)],mergedData,productiveReadCounts) else res = rep(NA,4)
 		fishRes = rbind(fishRes,c(names(r)[1],res, n, names(r)[n]))
