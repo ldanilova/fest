@@ -330,7 +330,6 @@ output$saveResults <- downloadHandler(
 			#========
 			# save results to xlsx
 #			tablesToXls$input = data.frame(isolate(reactiveValuesToList(input)))
-#		browser()
 			WriteXLS('tablesToXls', file, SheetNames = names(tablesToXls), row.names = T)
 
 			output$message = renderText('The results are saved')
